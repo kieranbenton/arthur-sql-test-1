@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Offline Local SQL App</title>
+  <!-- 1. Load the local JS file relative to this HTML file -->
+  <script src="sql-asm.js"></script>
+</head>
+<body>
+  <h1>My Offline Persistent Todo List</h1>
+
+  <input type="text" id="task-input" placeholder="New task...">
+  <button id="add-btn">Add Task</button>
+
+  <ul id="task-list"></ul>
+
+  <script>
+    let db;
+
+    async function initApp() {
+      // 2. Initialize SQLite from local script
+      const SQL = await initSqlJs();
+
+      // 3. Load saved SQLite database from browser storage
+      const savedData = localStorage.getItem("offline_sqlite_db");
+
+      if (savedData) {
+        // Rehydrate existing database
+        const byteArray = new Uint8Array(JSON.parse(savedData));
+        db = new SQL.Database(byteArray);
+      } else {
+        // First run: Create a new database table
+        db = new SQL.Database();
+        db.run("CREATE TABLE todos (id INTEGER PRIMARY KEY AUTOINCREMENT, task TEXT);");
+      }
+
+      renderTasks();
+    }
+
+    // Export SQLite database binary and store in browser LocalStorage
+    function saveDatabase() {
+      const binaryArray = db.export();
+      const jsonString = JSON.stringify(Array.from(binaryArray));
+      localStorage.setItem("offline_sqlite_db", jsonString);
+    }
+
+    function addTask() {
+      const input = document.getElementById("task-input");
+      const text = input.value.trim();
+
+      if (text) {
+        // Run SQL Insert
+        db.run("INSERT INTO todos (task) VALUES (?);", [text]);
+        
+        // Save database to survive refresh (F5)
+        saveDatabase();
+
+        input.value = "";
+        renderTasks();
+      }
+    }
+
+    function renderTasks() {
+      const list = document.getElementById("task-list");
+      list.innerHTML = "";
+
+      // Query database via SQL
+      const result = db.exec("SELECT * FROM todos;");
+
+      if (result.length > 0) {
+        const rows = result[0].values;
+        rows.forEach(row => {
+          const item = document.createElement("li");
+          item.textContent = `#${row[0]}: ${row[1]}`;
+          list.appendChild(item);
+        });
+      }
+    }
+
+    document.getElementById("add-btn").addEventListener("click", addTask);
+
+    initApp();
+  </script>
+</body>
+</html>
